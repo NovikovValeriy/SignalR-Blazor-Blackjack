@@ -1,0 +1,19 @@
+﻿.blackjack-drawdeck {
+    height: 190px;
+    width: 140px;
+    float: left;
+}
+
+.blackjack-drawdeck:not(:first-child) {
+    margin-left: -130px;
+}
+
+.blackjack-card {
+    height: 190px;
+    width: 140px;
+    float: left;
+}
+
+.blackjack-card:not(:first-child) {
+    margin-left: -100px;
+}

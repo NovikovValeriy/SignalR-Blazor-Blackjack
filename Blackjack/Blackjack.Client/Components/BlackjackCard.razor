@@ -1,0 +1,15 @@
+﻿@using Blackjack.Domain.Models
+
+@code {
+    [Parameter]
+    public Card Card { get; set; }
+}
+
+@if (Card.IsVisible)
+{
+    <img class="blackjack-card" src="images/common/@(Card.ImageName).png" />
+}
+else
+{
+    <img class="blackjack-card" src="images/common/cardBack.png" />
+}
