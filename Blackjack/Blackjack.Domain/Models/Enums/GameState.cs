@@ -3,12 +3,9 @@
     public enum GameState
     {
         NotStarted,
-        Betting,
         Dealing,
         InProgress,
-        Insurance,
         Payout,
-        Shuffling,
-        EscortedOut
+        Shuffling
     }
 }

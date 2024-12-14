@@ -2,14 +2,16 @@
 
 @code {
     [Parameter]
-    public Person Player { get; set; }
+    public Player Player { get; set; }
 
     [Parameter]
-    public Person Dealer { get; set; }
+    public Player Dealer { get; set; }
 }
 
 @if (Player.HasNaturalBlackjack
-     && (Player.Score > Dealer.Score || Dealer.IsBusted))
+     && (Player.Score > Dealer.Score 
+         || Dealer.IsBusted)
+     && !Dealer.HasNaturalBlackjack)
 {
     <h1 class="display-3 text-success">Blackjack!</h1>
 }
@@ -21,11 +23,11 @@ else if (Dealer.IsBusted || Player.Score > Dealer.Score)
 {
     <h1 class="display-3 text-success">Win!</h1>
 }
-else if (Dealer.Score > Player.Score)
+else if (Dealer.Score > Player.Score || (Player.Score == Dealer.Score && !Player.HasNaturalBlackjack && Dealer.HasNaturalBlackjack))
 {
     <h1 class="display-3 text-danger">Lose...</h1>
 }
-else if (Player.Score == Dealer.Score)
+else if (Player.Score == Dealer.Score || Player.HasNaturalBlackjack && Dealer.HasNaturalBlackjack)
 {
     <h1 class="display-3 text-info">Push</h1>
 }

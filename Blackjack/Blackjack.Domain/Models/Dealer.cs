@@ -3,7 +3,7 @@ using System;
 
 namespace Blackjack.Domain.Models
 {
-    public class Dealer : Person
+    public class Dealer : Player
     {
         public CardDeck Deck { get; set; } = new CardDeck();
 

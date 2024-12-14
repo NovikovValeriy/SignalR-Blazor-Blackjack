@@ -6,10 +6,10 @@
     public GameState State { get; set; }
 
     [Parameter]
-    public Person Player { get; set; }
+    public Player Player { get; set; }
 }
 
-@if (State == GameState.InProgress || State == GameState.Dealing || State == GameState.Insurance || State == GameState.Payout)
+@if (State == GameState.InProgress || State == GameState.Dealing || State == GameState.Payout)
 {
     <h1 class="display-3 text-info">@Player.ScoreDisplay</h1>
 }

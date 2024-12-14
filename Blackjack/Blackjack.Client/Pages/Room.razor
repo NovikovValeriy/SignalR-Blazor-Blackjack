@@ -1,0 +1,253 @@
+﻿@page "/room/{RoomId}"
+@rendermode InteractiveWebAssembly
+@using Microsoft.AspNetCore.SignalR.Client
+@using Blackjack.Domain.Models;
+@using Blackjack.Domain.Models.Enums;
+@inject NavigationManager Navigation
+
+@code {
+    [Parameter]
+    public string RoomId { get; set; }
+    public bool YourTurn { get; set; }
+    private HubConnection _hubConnection;
+
+    // Dealer Dealer = new Dealer();
+    // Player Host = new Player();
+    // Player Guest = new Player();
+    RoomModel roomModel = new RoomModel();
+
+    GameState state = GameState.NotStarted;
+
+    protected override Task OnInitializedAsync()
+    {
+        _hubConnection = new HubConnectionBuilder().WithUrl(Navigation.ToAbsoluteUri("/gamehub")).Build();
+
+        _hubConnection.On<RoomModel>("RecieveMove", (room) =>
+        {
+            roomModel = room;
+            StateHasChanged();
+        });
+
+        return base.OnInitializedAsync();
+    }
+
+    public async Task InitializeHand()
+    {
+        state = GameState.Dealing;
+        roomModel.Dealer.Deck = new CardDeck();
+        await Deal();
+    }
+
+    public async Task Deal()
+    {
+        state = GameState.Dealing;
+        await roomModel.Dealer.DealToPlayer(roomModel.Host);
+        StateHasChanged();
+        await roomModel.Dealer.DealToPlayer(roomModel.Guest);
+        StateHasChanged();
+
+        var dealerCard = roomModel.Dealer.Deal();
+        dealerCard.IsVisible = false;
+        await roomModel.Dealer.AddCard(dealerCard);
+        StateHasChanged();
+
+        await roomModel.Dealer.DealToPlayer(roomModel.Host);
+        StateHasChanged();
+        await roomModel.Dealer.DealToPlayer(roomModel.Guest);
+        StateHasChanged();
+
+        await roomModel.Dealer.DealToSelf();
+        StateHasChanged();
+
+        state = GameState.InProgress;
+
+
+        if (roomModel.Host.HasNaturalBlackjack && roomModel.Guest.HasNaturalBlackjack)
+        {
+            EndHand();
+        }
+        if (roomModel.Host.HasNaturalBlackjack)
+        {
+            roomModel.Host.HasStood = true;
+            roomModel.HostMove = false;
+        }
+        else roomModel.HostMove = true;
+        if (roomModel.Guest.HasNaturalBlackjack) roomModel.Guest.HasStood = true;
+    }
+
+    public async Task NewHand()
+    {
+
+        roomModel.Host.ClearHand();
+        roomModel.Guest.ClearHand();
+        roomModel.Dealer.ClearHand();
+
+        state = GameState.NotStarted;
+
+        await InitializeHand();
+    }
+
+    public async Task Delay(int millis)
+    {
+        await Task.Delay(millis);
+        StateHasChanged();
+    }
+
+    public async Task DealerTurn()
+    {
+        if (roomModel.Dealer.Score < 17)
+        {
+            await roomModel.Dealer.DealToSelf();
+            StateHasChanged();
+            await DealerTurn();
+        }
+    }
+
+    public async Task Hit(Player player)
+    {
+        await roomModel.Dealer.DealToPlayer(player);
+        if (player.IsBusted)
+        {
+            roomModel.HostMove = !roomModel.HostMove;
+            if (roomModel.HostMove) await DealerTurn();
+            EndHand();
+        }
+    }
+
+    public async Task Stand(Player player)
+    {
+        player.HasStood = true;
+        roomModel.HostMove = !roomModel.HostMove;
+
+        if(roomModel.HostMove
+        || roomModel.Guest.HasNaturalBlackjack && !roomModel.HostMove)
+        {
+            roomModel.Dealer.Reveal();
+            await DealerTurn();
+        }
+
+        EndHand();
+    }
+
+    public void EndHand()
+    {
+        if (roomModel.Host.HasStood && roomModel.Guest.HasStood
+            || roomModel.Host.IsBusted && roomModel.Guest.HasStood
+            || roomModel.Host.HasStood && roomModel.Guest.IsBusted
+            || roomModel.Host.IsBusted && roomModel.Guest.IsBusted)
+        {
+            state = GameState.Payout;
+            roomModel.Host.HasStood = false;
+            roomModel.Guest.HasStood = false;
+        }
+    }
+}
+
+<h3>Room</h3>
+<p>
+    @if (string.IsNullOrEmpty(RoomId))
+    {
+        @:None
+    }
+    else
+    {
+        @RoomId
+    }
+</p>
+
+<div class="row">
+    <div class="col-3">
+        <div>
+            @{
+                int cardCount = roomModel.Dealer.Deck.Count + 1;
+            }
+            @while (cardCount > 0)
+            {
+                <div class="blackjack-drawdeck">
+                    <img class="blackjack-card" src="images/cards/Back.png" />
+                </div>
+                cardCount -= 13;
+            }
+        </div>
+    </div>
+    <div class="col-3">
+        <BlackjackHand Cards="roomModel.Dealer.Cards" />
+    </div>
+    <div class="col-3">
+        <BlackjackScore State="state" Player="roomModel.Dealer" />
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-3">
+        @if (state == GameState.NotStarted)
+        {
+            <button class="btn btn-secondary" @onclick="(() => InitializeHand())">Start Game</button>
+        }
+        @if (state == GameState.Payout)
+        {
+            <button class="btn btn-secondary" @onclick="(() => NewHand())">Keep Going!</button>
+        }
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-3">
+        @if (!roomModel.Host.IsBusted && state == GameState.InProgress && !roomModel.Host.HasStood && roomModel.HostMove)
+        {
+            <button class="btn btn-primary" @onclick="(() => Stand(roomModel.Host))">Stand</button>
+            <button class="btn btn-primary" @onclick="(() => Hit(roomModel.Host))">Hit</button>
+        }
+    </div>
+    <div class="col-3">
+        <BlackjackHand Cards="roomModel.Host.Cards" />
+    </div>
+    <div class="col-3">
+        <BlackjackScore State="state" Player="roomModel.Host" />
+    </div>
+    <div class="col-3">
+        @if (state == GameState.Payout)
+        {
+            <BlackjackHandResult Player="roomModel.Host" Dealer="roomModel.Dealer" />
+        }
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-3">
+        @if (!roomModel.Guest.IsBusted && state == GameState.InProgress && !roomModel.Guest.HasStood && !roomModel.HostMove)
+        {
+            <button class="btn btn-primary" @onclick="(() => Stand(roomModel.Guest))">Stand</button>
+            <button class="btn btn-primary" @onclick="(() => Hit(roomModel.Guest))">Hit</button>
+        }
+    </div>
+    <div class="col-3">
+        <BlackjackHand Cards="roomModel.Guest.Cards" />
+    </div>
+    <div class="col-3">
+        <BlackjackScore State="state" Player="roomModel.Guest" />
+    </div>
+    <div class="col-3">
+        @if (state == GameState.Payout)
+        {
+            <BlackjackHandResult Player="roomModel.Guest" Dealer="roomModel.Dealer" />
+        }
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-3">
+        @* @if (state == GameState.Payout)
+        {
+            <p>Player 1(Host): </p>
+            <BlackjackHandResult Player="hostPlayer" Dealer="dealer" />
+            <p>Player 2(Guest): </p>
+            <BlackjackHandResult Player="guestPlayer" Dealer="dealer" />
+        } *@
+        @if (state == GameState.Dealing || state == GameState.Shuffling
+        || state == GameState.InProgress)
+        {
+            <BlackjackMessage State="state"/>
+        }
+    </div>
+</div>

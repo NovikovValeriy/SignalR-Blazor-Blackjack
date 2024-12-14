@@ -1,0 +1,11 @@
+﻿@using Blackjack.Domain.Models.Enums;
+
+@code {
+    [Parameter]
+    public GameState State { get; set; }
+}
+
+@if (State == GameState.Dealing)
+{
+    <span class="display-3 text-info">Dealing...</span>
+}

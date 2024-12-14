@@ -49,3 +49,54 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+.buttons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+input[type="text"] {
+    flex: 1;
+}
+
+.join-room-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.image-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.field-block {
+    width: 100px;
+    height: 100px;
+    border: solid black 3px;
+    border-radius: 10px;
+}
+
+.innerVal {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.field-row {
+    display: flex;
+    gap: 1px;
+    align-items: center;
+}

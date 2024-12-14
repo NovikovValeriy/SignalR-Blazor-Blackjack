@@ -1,0 +1,56 @@
+﻿@page "/"
+@rendermode InteractiveWebAssembly
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+
+
+<div class="buttons-container">
+    <h1>Blackjack</h1>
+    <button class="btn btn-primary" @onclick="CreateRoom">Создать комнату</button>
+
+    <div class="join-room-container">
+        <input type="text" @bind="roomName" placeholder="Введите имя комнаты" class="form-control" />
+        <button class="btn btn-secondary" @onclick="MakeJoin">Присоединиться</button>
+    </div>
+
+</div>
+
+<div class="image-container">
+    <img src="images/banner.jpg" />
+</div>
+
+
+@code {
+    private HubConnection _hubConnection;
+    private string roomName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("INIT");
+        _hubConnection = new HubConnectionBuilder().WithUrl(Navigation.ToAbsoluteUri("/gameHub")).Build();
+        _hubConnection.On<Guid>("ReceiveRoomId", async (roomId) =>
+        {
+            Console.WriteLine("received room id ");
+            await _hubConnection.StopAsync();
+            await _hubConnection.DisposeAsync();
+            Navigation.NavigateTo($"/room/{roomId}");
+        });
+
+        _hubConnection.On<string>("Log", (conn) =>
+        {
+            Console.WriteLine("Current " + conn);
+        });
+        await _hubConnection.StartAsync();
+        await base.OnInitializedAsync();
+    }
+
+    private async Task CreateRoom()
+    {
+        await _hubConnection.SendAsync("CreateRoom");
+    }
+
+    private void MakeJoin()
+    {
+        Navigation.NavigateTo($"/room/{roomName}");
+    }
+}

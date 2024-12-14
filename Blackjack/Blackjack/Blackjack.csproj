@@ -13,8 +13,7 @@
 
   <ItemGroup>
     <Folder Include="Components\Pages\" />
-    <Folder Include="Services\Game\" />
-    <Folder Include="Services\Room\" />
+    <Folder Include="wwwroot\images\cards\" />
   </ItemGroup>
 
   <ItemGroup>

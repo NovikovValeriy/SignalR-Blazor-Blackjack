@@ -19,6 +19,7 @@ namespace Blackjack.Domain.Models
 
         public CardDeck()
         {
+            Cards = new Stack<Card>();
             List<Card> cards = new List<Card>();
 
             foreach (CardSuit suit in (CardSuit[])Enum.GetValues(typeof(CardSuit)))
@@ -29,7 +30,8 @@ namespace Blackjack.Domain.Models
                     {
                         Suit = suit,
                         Value = value,
-                        ImageName = "card" + suit.GetDisplayName() + value.GetDisplayName()
+                        //ImageName = "card" + suit.GetDisplayName() + value.GetDisplayName()
+                        ImageName = suit.GetDisplayName() + "_" + value.GetDisplayName(),
                     };
 
                     cards.Add(newCard);
