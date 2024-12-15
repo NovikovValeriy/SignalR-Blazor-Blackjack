@@ -35,11 +35,6 @@
             await _hubConnection.DisposeAsync();
             Navigation.NavigateTo($"/room/{roomId}");
         });
-
-        _hubConnection.On<string>("Log", (conn) =>
-        {
-            Console.WriteLine("Current " + conn);
-        });
         await _hubConnection.StartAsync();
         await base.OnInitializedAsync();
     }

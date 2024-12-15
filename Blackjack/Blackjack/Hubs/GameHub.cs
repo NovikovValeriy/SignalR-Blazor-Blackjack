@@ -8,10 +8,12 @@ namespace Blackjack.Hubs
     public class GameHub : Hub
     {
         private readonly IRoomService _roomService;
+        private readonly IGameService _gameService;
 
-        public GameHub(IRoomService roomService)
+        public GameHub(IRoomService roomService, IGameService gameService)
         {
             _roomService = roomService;
+            _gameService = gameService;
         }
 
         public void CreateRoom()
@@ -23,35 +25,41 @@ namespace Blackjack.Hubs
         public async Task JoinRoom(Guid roomId)
         {
             _roomService.JoinRoomAsync(roomId, Context.ConnectionId);
-            await Clients.Caller.SendAsync("Connected", Context.ConnectionId);
+            //await Clients.Caller.SendAsync("Connected", Context.ConnectionId);
         }
 
-        //public async Task MakeMove(Guid roomId, int i, int j)
-        //{
-        //    var room = _gameService.MakeMove(roomId, Context.ConnectionId, i, j);
-        //    if (room.HostMove)
-        //    {
-        //        await Clients.Client(room.HostConnection).SendAsync("NotifyTurn", room.Board[0][0]);
-        //        Console.WriteLine("sent turn");
-        //    }
-        //    else
-        //    {
-        //        await Clients.Client(room.GuestConnection).SendAsync("NotifyTurn", room.Board[0][0]);
-        //        Console.WriteLine("sent turn");
-        //    }
-        //    await Clients.Client(room.HostConnection).SendAsync("ReceiveMove", room.Board);
-        //    await Clients.Client(room.GuestConnection).SendAsync("ReceiveMove", room.Board);
-        //}
-
-        public async Task MakeMove(Guid roomId, RoomModel room)
+        public async Task StartGame(Guid roomId)
         {
+            var room = _gameService.StartGame(roomId, Context.ConnectionId);
             await Clients.Client(room.HostConnection).SendAsync("ReceiveMove", room);
             await Clients.Client(room.GuestConnection).SendAsync("ReceiveMove", room);
         }
 
+        public async Task Hit(Guid roomId)
+        {
+            var room = _gameService.MakeHit(roomId, Context.ConnectionId);
+            await Clients.Client(room.HostConnection).SendAsync("ReceiveMove", room);
+            await Clients.Client(room.GuestConnection).SendAsync("ReceiveMove", room);
+        }
+        public async Task Stand(Guid roomId)
+        {
+            var room = _gameService.MakeStand(roomId, Context.ConnectionId);
+            await Clients.Client(room.HostConnection).SendAsync("ReceiveMove", room);
+            await Clients.Client(room.GuestConnection).SendAsync("ReceiveMove", room);
+            if (room.HostMove)
+            {
+                await Clients.Client(room.HostConnection).SendAsync("NotifyTurn", 1);
+            }
+            else
+            {
+                await Clients.Client(room.GuestConnection).SendAsync("NotifyTurn", 1);
+            }
+        }
+
+
         public override Task OnConnectedAsync()
         {
-            Console.WriteLine($"OnConnectedAsync {Context.ConnectionId}");
+            Clients.Caller.SendAsync("ReceiveConnectionId", Context.ConnectionId);
             return base.OnConnectedAsync();
         }
 

@@ -4,6 +4,8 @@ namespace Blackjack.Services.Game
 {
     public interface IGameService
     {
-        RoomModel MakeMove(Guid roomId, string connectionId, int i, int j);
+        public RoomModel StartGame(Guid roomId, string connectionId);
+        public RoomModel MakeStand(Guid roomId, string connectionId);
+        public RoomModel MakeHit(Guid roomId, string connectionId);
     }
 }

@@ -5,145 +5,113 @@
 @using Blackjack.Domain.Models.Enums;
 @inject NavigationManager Navigation
 
+
 @code {
     [Parameter]
     public string RoomId { get; set; }
+
+    public string ConnectionId { get; set; }
     public bool YourTurn { get; set; }
+    public bool CanBeStarted { get; set; } = false;
     private HubConnection _hubConnection;
 
-    // Dealer Dealer = new Dealer();
-    // Player Host = new Player();
-    // Player Guest = new Player();
     RoomModel roomModel = new RoomModel();
 
-    GameState state = GameState.NotStarted;
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
-        _hubConnection = new HubConnectionBuilder().WithUrl(Navigation.ToAbsoluteUri("/gamehub")).Build();
+        _hubConnection = new HubConnectionBuilder().WithUrl(Navigation.ToAbsoluteUri("/gameHub")).Build();
 
-        _hubConnection.On<RoomModel>("RecieveMove", (room) =>
+        _hubConnection.On<RoomModel>("ReceiveMove", (model) =>
         {
-            roomModel = room;
+            roomModel = model;
+            if(roomModel.GameState == GameState.Payout)
+                CanBeStarted = true;
+            else 
+                CanBeStarted = false;
+            if (roomModel.HostConnection == ConnectionId)
+                YourTurn = roomModel.HostMove;
+            else YourTurn = !roomModel.HostMove;
             StateHasChanged();
         });
 
-        return base.OnInitializedAsync();
-    }
-
-    public async Task InitializeHand()
-    {
-        state = GameState.Dealing;
-        roomModel.Dealer.Deck = new CardDeck();
-        await Deal();
-    }
-
-    public async Task Deal()
-    {
-        state = GameState.Dealing;
-        await roomModel.Dealer.DealToPlayer(roomModel.Host);
-        StateHasChanged();
-        await roomModel.Dealer.DealToPlayer(roomModel.Guest);
-        StateHasChanged();
-
-        var dealerCard = roomModel.Dealer.Deal();
-        dealerCard.IsVisible = false;
-        await roomModel.Dealer.AddCard(dealerCard);
-        StateHasChanged();
-
-        await roomModel.Dealer.DealToPlayer(roomModel.Host);
-        StateHasChanged();
-        await roomModel.Dealer.DealToPlayer(roomModel.Guest);
-        StateHasChanged();
-
-        await roomModel.Dealer.DealToSelf();
-        StateHasChanged();
-
-        state = GameState.InProgress;
-
-
-        if (roomModel.Host.HasNaturalBlackjack && roomModel.Guest.HasNaturalBlackjack)
+        _hubConnection.On<string>("ReceiveConnectionId", (id) =>
         {
-            EndHand();
-        }
-        if (roomModel.Host.HasNaturalBlackjack)
-        {
-            roomModel.Host.HasStood = true;
-            roomModel.HostMove = false;
-        }
-        else roomModel.HostMove = true;
-        if (roomModel.Guest.HasNaturalBlackjack) roomModel.Guest.HasStood = true;
-    }
-
-    public async Task NewHand()
-    {
-
-        roomModel.Host.ClearHand();
-        roomModel.Guest.ClearHand();
-        roomModel.Dealer.ClearHand();
-
-        state = GameState.NotStarted;
-
-        await InitializeHand();
-    }
-
-    public async Task Delay(int millis)
-    {
-        await Task.Delay(millis);
-        StateHasChanged();
-    }
-
-    public async Task DealerTurn()
-    {
-        if (roomModel.Dealer.Score < 17)
-        {
-            await roomModel.Dealer.DealToSelf();
+            ConnectionId = id;
             StateHasChanged();
-            await DealerTurn();
+        });
+
+        // _hubConnection.On<int>("GameOver", (res) =>
+        // {
+        //     GameOver = true;
+        //     Playable = false;
+        //     StateHasChanged();
+        // });
+
+        _hubConnection.On("Blackjack", () =>
+        {
+            StateHasChanged();
+        });
+
+        _hubConnection.On("Payout", () =>
+        {
+            CanBeStarted = true;
+            StateHasChanged();
+        });
+
+        _hubConnection.On<int>("NotifyTurn", (turn) =>
+        {
+            YourTurn = true;
+            StateHasChanged();
+        });
+
+        _hubConnection.On<RoomModel>("PlayerJoin", async (room) =>
+        {
+            //await _hubConnection.SendAsync("StartGame", Guid.Parse(RoomId));
+            roomModel = room;
+            if(ConnectionId == roomModel.HostConnection) CanBeStarted = true;
+            StateHasChanged();
+        });
+
+        await _hubConnection.StartAsync();
+
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            await JoinRoom();
+            //StateHasChanged();
         }
     }
 
-    public async Task Hit(Player player)
+    private async Task JoinRoom()
     {
-        await roomModel.Dealer.DealToPlayer(player);
-        if (player.IsBusted)
-        {
-            roomModel.HostMove = !roomModel.HostMove;
-            if (roomModel.HostMove) await DealerTurn();
-            EndHand();
-        }
+        await _hubConnection.SendAsync("JoinRoom", Guid.Parse(RoomId));
     }
 
-    public async Task Stand(Player player)
+    public async Task StartGame()
     {
-        player.HasStood = true;
-        roomModel.HostMove = !roomModel.HostMove;
-
-        if(roomModel.HostMove
-        || roomModel.Guest.HasNaturalBlackjack && !roomModel.HostMove)
-        {
-            roomModel.Dealer.Reveal();
-            await DealerTurn();
-        }
-
-        EndHand();
+        //CanBeStarted = false;
+        await _hubConnection.SendAsync("StartGame", Guid.Parse(RoomId));
+        StateHasChanged();
     }
 
-    public void EndHand()
+    public async Task Hit()
     {
-        if (roomModel.Host.HasStood && roomModel.Guest.HasStood
-            || roomModel.Host.IsBusted && roomModel.Guest.HasStood
-            || roomModel.Host.HasStood && roomModel.Guest.IsBusted
-            || roomModel.Host.IsBusted && roomModel.Guest.IsBusted)
-        {
-            state = GameState.Payout;
-            roomModel.Host.HasStood = false;
-            roomModel.Guest.HasStood = false;
-        }
+        await _hubConnection.SendAsync("Hit", Guid.Parse(RoomId));
+    }
+
+    public async Task Stand()
+    {
+        YourTurn = false;
+        await _hubConnection.SendAsync("Stand", Guid.Parse(RoomId));
     }
 }
 
-<h3>Room</h3>
+<h3>Room ID:</h3>
 <p>
     @if (string.IsNullOrEmpty(RoomId))
     {
@@ -174,61 +142,90 @@
         <BlackjackHand Cards="roomModel.Dealer.Cards" />
     </div>
     <div class="col-3">
-        <BlackjackScore State="state" Player="roomModel.Dealer" />
+        <BlackjackScore State="roomModel.GameState" Player="roomModel.Dealer" />
     </div>
 </div>
 
-<div class="row">
+
+@* <div class="row">
     <div class="col-3">
-        @if (state == GameState.NotStarted)
+        @if (roomModel.HostConnection == ConnectionId && CanBeStarted)
         {
-            <button class="btn btn-secondary" @onclick="(() => InitializeHand())">Start Game</button>
-        }
-        @if (state == GameState.Payout)
-        {
-            <button class="btn btn-secondary" @onclick="(() => NewHand())">Keep Going!</button>
+            <button class="btn btn-secondary" @onclick="(() => StartGame())">Start Game</button>
         }
     </div>
-</div>
+</div> *@
+
+@if(roomModel.GameState != GameState.NotStarted)
+{
+    <div class="row">
+        <div class="col-3">
+        </div>
+        <div class="col-3">
+            <h1>
+                @(roomModel.HostConnection == ConnectionId ? "You:" : "Enemy:")
+            </h1>
+        </div>
+    </div>
+}
 
 <div class="row">
     <div class="col-3">
-        @if (!roomModel.Host.IsBusted && state == GameState.InProgress && !roomModel.Host.HasStood && roomModel.HostMove)
+        @if (roomModel.HostConnection == ConnectionId && CanBeStarted)
         {
-            <button class="btn btn-primary" @onclick="(() => Stand(roomModel.Host))">Stand</button>
-            <button class="btn btn-primary" @onclick="(() => Hit(roomModel.Host))">Hit</button>
+            <button class="btn btn-secondary" @onclick="(() => StartGame())">Start Game</button>
+        }
+        @if (!roomModel.Host.IsBusted && roomModel.GameState == GameState.InProgress && !roomModel.Host.HasStood && roomModel.HostMove && YourTurn && ConnectionId == roomModel.HostConnection)
+        @* @if (YourTurn && ConnectionId == roomModel.HostConnection && roomModel.GameState == GameState.InProgress) *@
+        {
+            <button class="btn btn-primary" @onclick="(() => Stand())">Stand</button>
+            <button class="btn btn-primary" @onclick="(() => Hit())">Hit</button>
         }
     </div>
     <div class="col-3">
         <BlackjackHand Cards="roomModel.Host.Cards" />
     </div>
     <div class="col-3">
-        <BlackjackScore State="state" Player="roomModel.Host" />
+        <BlackjackScore State="roomModel.GameState" Player="roomModel.Host" />
     </div>
     <div class="col-3">
-        @if (state == GameState.Payout)
+        @if (roomModel.GameState == GameState.Payout)
         {
             <BlackjackHandResult Player="roomModel.Host" Dealer="roomModel.Dealer" />
         }
     </div>
 </div>
 
+@if (roomModel.GameState != GameState.NotStarted)
+{
+    <div class="row">
+        <div class="col-3">
+        </div>
+        <div class="col-3">
+            <h1>
+                @(roomModel.GuestConnection == ConnectionId ? "You:" : "Enemy:")
+            </h1>
+        </div>
+    </div>
+}
+
 <div class="row">
     <div class="col-3">
-        @if (!roomModel.Guest.IsBusted && state == GameState.InProgress && !roomModel.Guest.HasStood && !roomModel.HostMove)
+        @if (!roomModel.Guest.IsBusted && roomModel.GameState == GameState.InProgress && !roomModel.Guest.HasStood && !roomModel.HostMove && ConnectionId == roomModel.GuestConnection)
+        @* @if (YourTurn && ConnectionId == roomModel.GuestConnection) *@
         {
-            <button class="btn btn-primary" @onclick="(() => Stand(roomModel.Guest))">Stand</button>
-            <button class="btn btn-primary" @onclick="(() => Hit(roomModel.Guest))">Hit</button>
+            <button class="btn btn-primary" @onclick="(() => Stand())">Stand</button>
+            <button class="btn btn-primary" @onclick="(() => Hit())">Hit</button>
         }
     </div>
     <div class="col-3">
         <BlackjackHand Cards="roomModel.Guest.Cards" />
     </div>
     <div class="col-3">
-        <BlackjackScore State="state" Player="roomModel.Guest" />
+        <BlackjackScore State="roomModel.GameState" Player="roomModel.Guest" />
     </div>
     <div class="col-3">
-        @if (state == GameState.Payout)
+        @if (roomModel.GameState == GameState.Payout)
         {
             <BlackjackHandResult Player="roomModel.Guest" Dealer="roomModel.Dealer" />
         }
@@ -244,10 +241,139 @@
             <p>Player 2(Guest): </p>
             <BlackjackHandResult Player="guestPlayer" Dealer="dealer" />
         } *@
-        @if (state == GameState.Dealing || state == GameState.Shuffling
-        || state == GameState.InProgress)
+        @if (roomModel.GameState == GameState.Dealing || roomModel.GameState == GameState.Shuffling
+        || roomModel.GameState == GameState.InProgress)
         {
-            <BlackjackMessage State="state"/>
+            <BlackjackMessage State="roomModel.GameState" />
         }
     </div>
 </div>
+
+@*@code {
+    [Parameter]
+    public string RoomId { get; set; }
+    public bool YourTurn { get; set; }
+    private HubConnection _hubConnection;
+
+    RoomModel roomModel = new RoomModel();
+
+
+    protected override Task OnInitializedAsync()
+    {
+        _hubConnection = new HubConnectionBuilder().WithUrl(Navigation.ToAbsoluteUri("/gamehub")).Build();
+
+        _hubConnection.On<RoomModel>("RecieveMove", (room) =>
+        {
+            roomModel = room;
+            StateHasChanged();
+        });
+
+        return base.OnInitializedAsync();
+    }
+
+    public void InitializeHand()
+    {
+        roomModel.GameState = GameState.Dealing;
+        roomModel.Dealer.Deck = new CardDeck();
+        Deal();
+    }
+
+    public void Deal()
+    {
+        roomModel.GameState = GameState.Dealing;
+        roomModel.Dealer.DealToPlayer(roomModel.Host);
+        StateHasChanged();
+        roomModel.Dealer.DealToPlayer(roomModel.Guest);
+        StateHasChanged();
+
+        var dealerCard = roomModel.Dealer.Deal();
+        dealerCard.IsVisible = false;
+        roomModel.Dealer.AddCard(dealerCard);
+        StateHasChanged();
+
+        roomModel.Dealer.DealToPlayer(roomModel.Host);
+        StateHasChanged();
+        roomModel.Dealer.DealToPlayer(roomModel.Guest);
+        StateHasChanged();
+
+        roomModel.Dealer.DealToSelf();
+        StateHasChanged();
+
+        roomModel.GameState = GameState.InProgress;
+
+
+        if (roomModel.Host.HasNaturalBlackjack && roomModel.Guest.HasNaturalBlackjack)
+        {
+            EndHand();
+        }
+        if (roomModel.Host.HasNaturalBlackjack)
+        {
+            roomModel.Host.HasStood = true;
+            roomModel.HostMove = false;
+        }
+        else roomModel.HostMove = true;
+        if (roomModel.Guest.HasNaturalBlackjack) roomModel.Guest.HasStood = true;
+    }
+
+    public void NewHand()
+    {
+
+        roomModel.Host.ClearHand();
+        roomModel.Guest.ClearHand();
+        roomModel.Dealer.ClearHand();
+
+        roomModel.GameState = GameState.NotStarted;
+
+        InitializeHand();
+    }
+
+    public void DealerTurn()
+    {
+        if (roomModel.Dealer.Score < 17)
+        {
+            roomModel.Dealer.DealToSelf();
+            StateHasChanged();
+            DealerTurn();
+        }
+    }
+
+    public void Hit(Player player)
+    {
+        roomModel.Dealer.DealToPlayer(player);
+        if (player.IsBusted)
+        {
+            roomModel.HostMove = !roomModel.HostMove;
+            if (roomModel.HostMove) DealerTurn();
+            EndHand();
+        }
+    }
+
+    public void Stand(Player player)
+    {
+        player.HasStood = true;
+        roomModel.HostMove = !roomModel.HostMove;
+
+        if(roomModel.HostMove
+        || roomModel.Guest.HasNaturalBlackjack && !roomModel.HostMove)
+        {
+            roomModel.Dealer.Reveal();
+            DealerTurn();
+        }
+
+        EndHand();
+    }
+
+    public void EndHand()
+    {
+        if (roomModel.Host.HasStood && roomModel.Guest.HasStood
+            || roomModel.Host.IsBusted && roomModel.Guest.HasStood
+            || roomModel.Host.HasStood && roomModel.Guest.IsBusted
+            || roomModel.Host.IsBusted && roomModel.Guest.IsBusted)
+        {
+            roomModel.GameState = GameState.Payout;
+            roomModel.Host.HasStood = false;
+            roomModel.Guest.HasStood = false;
+        }
+    }
+}
+*@

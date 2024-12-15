@@ -36,6 +36,8 @@ namespace Blackjack.Services.Room
                 Console.WriteLine("Bad request on " + connectionId);
                 return;
             }
+            _memoryCache.Set(connectionId, roomId);
+            _memoryCache.Set(roomId, room);
 
             if (string.IsNullOrEmpty(room.HostConnection))
             {
@@ -56,11 +58,9 @@ namespace Blackjack.Services.Room
             }
             if (!string.IsNullOrEmpty(room.HostConnection) && !string.IsNullOrEmpty(room.GuestConnection))
             {
-                _hubContext.Clients.Client(room.HostConnection).SendAsync("PlayerJoin", 1);
-                _hubContext.Clients.Client(room.GuestConnection).SendAsync("PlayerJoin", 1);
+                _hubContext.Clients.Client(room.HostConnection).SendAsync("PlayerJoin", room);
+                _hubContext.Clients.Client(room.GuestConnection).SendAsync("PlayerJoin", room);
             }
-            _memoryCache.Set(connectionId, roomId);
-            _memoryCache.Set(roomId, room);
         }
 
         public void DisconnectRoomAsync(string connectionId)

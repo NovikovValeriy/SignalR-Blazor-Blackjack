@@ -19,14 +19,14 @@ namespace Blackjack.Domain.Models
             Cards.ForEach(x => x.IsVisible = true);
         }
 
-        public async Task DealToSelf()
+        public void DealToSelf()
         {
-            await AddCard(Deal());
+            AddCard(Deal());
         }
 
-        public async Task DealToPlayer(Player player)
+        public void DealToPlayer(Player player)
         {
-            await player.AddCard(Deal());
+            player.AddCard(Deal());
         }
     }
 }

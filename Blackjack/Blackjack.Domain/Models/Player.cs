@@ -22,7 +22,7 @@ namespace Blackjack.Domain.Models
             }
         }
 
-        public async Task AddCard(Card card)
+        public void AddCard(Card card)
         {
             Cards.Add(card);
             //await Task.Delay(300);
